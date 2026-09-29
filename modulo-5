@@ -1,0 +1,109 @@
+m5_consultas_joins.sql
+Consultas con JOINs sobre Ventas_Tech_DB
+Motor: SQL Server (T-SQL)
+
+USE Ventas_Tech_DB;
+GO
+
+-- CONSULTA 1: Vista base del proyecto (INNER JOIN)
+-- Cruza ventas con clientes, productos y categorias para obtener
+-- una fila enriquecida con toda la información del negocio.
+-- Columna para agrupar: nombre_categoria | Columna para filtrar: ciudad
+SELECT 
+    v.fecha_venta,
+    c.id_cliente,
+    c.nombre AS cliente,
+    c.ciudad,
+    p.nombre_producto,
+    cat.nombre_categoria AS categoria,
+    v.cantidad,
+    v.precio_unitario,
+    (v.cantidad * v.precio_unitario) AS total_venta
+FROM ventas v
+INNER JOIN clientes c   ON v.id_cliente = c.id_cliente
+INNER JOIN productos p  ON v.id_producto = p.id_producto
+INNER JOIN categorias cat ON p.id_categoria = cat.id_categoria
+ORDER BY v.fecha_venta;
+GO
+
+-- CONSULTA 2: Clientes sin ventas (LEFT JOIN)
+-- Clientes registrados que todavía no realizaron ninguna compra.
+
+SELECT 
+    c.nombre,
+    c.email,
+    c.fecha_registro
+FROM clientes c
+LEFT JOIN ventas v ON c.id_cliente = v.id_cliente
+WHERE v.id_venta IS NULL;
+GO
+
+-- CONSULTA 3: Productos sin ventas (LEFT JOIN)
+-- Productos del catálogo que nunca fueron vendidos.
+
+SELECT 
+    p.nombre_producto,
+    cat.nombre_categoria AS categoria,
+    p.precio
+FROM productos p
+INNER JOIN categorias cat ON p.id_categoria = cat.id_categoria
+LEFT JOIN ventas v ON p.id_producto = v.id_producto
+WHERE v.id_venta IS NULL;
+GO
+
+-- CONSULTA 4: Consolidado por canal (UNION ALL)
+-- La columna "canal" no existe en las tablas: se crea como valor
+-- literal, separando las ventas según la ciudad del cliente en dos
+-- regiones de ejemplo (Centro vs. Cuyo/Norte).
+
+SELECT 
+    v.fecha_venta,
+    (v.cantidad * v.precio_unitario) AS total,
+    'Región Centro' AS canal
+FROM ventas v
+INNER JOIN clientes c ON v.id_cliente = c.id_cliente
+WHERE c.ciudad IN ('Buenos Aires', 'Córdoba', 'Rosario')
+
+UNION ALL
+
+SELECT 
+    v.fecha_venta,
+    (v.cantidad * v.precio_unitario) AS total,
+    'Región Cuyo/Norte' AS canal
+FROM ventas v
+INNER JOIN clientes c ON v.id_cliente = c.id_cliente
+WHERE c.ciudad IN ('Mendoza', 'Tucumán');
+GO
+
+-- Versión agrupada de la Consulta 4: total facturado por cada canal
+SELECT 
+    canal,
+    SUM(total) AS total_facturado
+FROM (
+    SELECT 
+        (v.cantidad * v.precio_unitario) AS total,
+        'Región Centro' AS canal
+    FROM ventas v
+    INNER JOIN clientes c ON v.id_cliente = c.id_cliente
+    WHERE c.ciudad IN ('Buenos Aires', 'Córdoba', 'Rosario')
+
+    UNION ALL
+
+    SELECT 
+        (v.cantidad * v.precio_unitario) AS total,
+        'Región Cuyo/Norte' AS canal
+    FROM ventas v
+    INNER JOIN clientes c ON v.id_cliente = c.id_cliente
+    WHERE c.ciudad IN ('Mendoza', 'Tucumán')
+) AS ventas_por_canal
+GROUP BY canal;
+GO
+
+
+-- Hallazgos
+-- Hallazgo 1: la Consulta 1 confirma que las categorías Computación
+-- y Accesorios concentran la mayor parte de las ventas cruzadas.
+-- Hallazgo 2: la Consulta 2 y 3 muestran si hay clientes o productos
+-- inactivos que conviene revisar comercialmente.
+-- Hallazgo 3: la Región Centro concentra más facturación que
+-- Cuyo/Norte, ya que agrupa a 3 de los 5 clientes de la base.
